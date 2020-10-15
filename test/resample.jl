@@ -1,4 +1,4 @@
-using GeoData, Test, ArchGDAL, GeoFormatTypes
+using GeoData, Test, ArchGDAL, GeoFormatTypes, NCDatasets, Dates
 using GeoData: resample
 
 include(joinpath(dirname(pathof(GeoData)), "../test/test_utils.jl"))
@@ -35,4 +35,23 @@ include(joinpath(dirname(pathof(GeoData)), "../test/test_utils.jl"))
         @test isapprox(index(snaptarget, Lat), index(snapped, Lat))
         @test isapprox(index(snaptarget, Lon), index(snapped, Lon))
     end
+
+    @testset "snap resample with extra dimension" begin
+        ceati = cat(cea, cea, cea, cea; dims=Ti(Date(2001, 1):Month(1):Date(2001, 4)))
+        snaptarget = GD_output
+        snapped = resample(ceati, snaptarget)
+        @test size(snapped) == (123, 103, 1, 4)
+        @test isapprox(index(snaptarget, Lat), index(snapped, Lat))
+        @test isapprox(index(snaptarget, Lon), index(snapped, Lon))
+    end
+
+    @testset "snap stack" begin
+        stack = GeoStack((a=cea, b=cea))
+        snappedstack = resample(stack, snaptarget)
+        @test snappedstack isa GeoStack
+        @test size(snappedstack[:a]) == size(snappedstack[:b]) == (123, 103, 1)
+        @test isapprox(index(snaptarget, Lat), index(snappedstack[:a], Lat))
+        @test isapprox(index(snaptarget, Lon), index(snappedstack[:b], Lon))
+    end
+
 end

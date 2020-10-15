@@ -39,6 +39,7 @@ end
 
 """
     GDALarray(filename;
+              crs=nothing,
               usercrs=nothing,
               name="",
               dims=nothing,
@@ -94,8 +95,9 @@ GDALarray(filename::AbstractString; kwargs...) = begin
     end
 end
 GDALarray(raster::AG.RasterDataset, filename, key=nothing;
+          crs=nothing,
           usercrs=nothing,
-          dims=dims(raster, usercrs),
+          dims=dims(raster, crs, usercrs),
           refdims=(),
           name=Symbol(""),
           metadata=metadata(raster),
@@ -197,14 +199,17 @@ withsource(f, ::Type{<:GDALarray}, filename::AbstractString, key...) =
 
 # DimensionalData methods for ArchGDAL types ###############################
 
-dims(raster::AG.RasterDataset, usercrs=nothing) = begin
+dims(raster::AG.RasterDataset, crs=nothing, usercrs=nothing) = begin
     gt = try
-        AG.getgeotransform(raster) catch GDAL_EMPTY_TRANSFORM end
+        AG.getgeotransform(raster) 
+    catch 
+        GDAL_EMPTY_TRANSFORM 
+    end
     lonsize, latsize = size(raster)
 
     nbands = AG.nraster(raster)
     band = Band(1:nbands, mode=Categorical(Ordered()))
-    sourcecrs = crs(raster)
+    sourcecrs  = crs isa Nothing ? GeoData.crs(raster) : crs
 
     lonlat_metadata=GDALdimMetadata()
 
@@ -371,7 +376,7 @@ end
 # Create a GeoArray from a memory-backed dataset
 function GeoArray(dataset::AG.Dataset;
                   usercrs=nothing,
-                  dims=dims(AG.RasterDataset(dataset), usercrs),
+                  dims=dims(AG.RasterDataset(dataset), crs, usercrs),
                   refdims=(),
                   name=Symbol(""),
                   metadata=metadata(AG.RasterDataset(dataset)),

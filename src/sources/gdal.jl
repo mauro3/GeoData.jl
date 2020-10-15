@@ -375,6 +375,7 @@ end
 
 # Create a GeoArray from a memory-backed dataset
 function GeoArray(dataset::AG.Dataset;
+                  crs=nothing,
                   usercrs=nothing,
                   dims=dims(AG.RasterDataset(dataset), crs, usercrs),
                   refdims=(),

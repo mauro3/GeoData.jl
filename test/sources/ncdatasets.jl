@@ -35,7 +35,7 @@ stackkeys = (
     ds = NCDataset(ncsingle)
 
     @testset "open" begin
-        @test all(Open(A -> A[Lat=1], ncarray) .=== ncarray[:, 1, :])
+        @test all(open(A -> A[Lat=1], ncarray) .=== ncarray[:, 1, :])
     end
 
     @testset "array properties" begin

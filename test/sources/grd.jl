@@ -128,18 +128,18 @@ path = joinpath(testpath, "data/rlogo")
             @test data(saved) == data(geoarray)
         end
 
-        @testset "to netcdf" begin
-            filename2 = tempname()
-            write(filename2, NCDarray, grdarray[Band(1)])
-            saved = GeoArray(NCDarray(filename2; crs=crs(grdarray)))
-            @test size(saved) == size(grdarray[Band(1)])
-            @test replace_missing(saved, missingval(grdarray)) ≈ reverse(grdarray[Band(1)]; dims=Lat)
-            @test replace_missing(saved, missingval(grdarray)) ≈ reverse(grdarray[Band(1)]; dims=Lat)
-            @test index(saved, Lon) ≈ index(grdarray, Lon) .+ 0.5
-            @test index(saved, Lat) ≈ index(grdarray, Lat) .+ 0.5
-            @test bounds(saved, Lat) == bounds(grdarray, Lat)
-            @test bounds(saved, Lon) == bounds(grdarray, Lon)
-        end
+        # @testset "to netcdf" begin
+        #     filename2 = tempname()
+        #     write(filename2, NCDarray, grdarray[Band(1)])
+        #     saved = GeoArray(NCDarray(filename2; crs=crs(grdarray)))
+        #     @test size(saved) == size(grdarray[Band(1)])
+        #     @test replace_missing(saved, missingval(grdarray)) ≈ reverse(grdarray[Band(1)]; dims=Lat)
+        #     @test replace_missing(saved, missingval(grdarray)) ≈ reverse(grdarray[Band(1)]; dims=Lat)
+        #     @test index(saved, Lon) ≈ index(grdarray, Lon) .+ 0.5
+        #     @test index(saved, Lat) ≈ index(grdarray, Lat) .+ 0.5
+        #     @test bounds(saved, Lat) == bounds(grdarray, Lat)
+        #     @test bounds(saved, Lon) == bounds(grdarray, Lon)
+        # end
 
         @testset "to gdal" begin
             # No Band

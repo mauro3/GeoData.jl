@@ -293,8 +293,7 @@ function DD.dims(dataset::NCD.Dataset, key::Key, crs=nothing, mappedcrs=nothing)
             dimtype = haskey(DIMMAP, dimname) ? DIMMAP[dimname] : DD.basetypeof(DD.key2dim(Symbol(dimname)))
             index = dvar[:]
             meta = NCDdimMetadata(DD.metadatadict(dvar.attrib))
-            mode = _ncdmode(index, dimtype, crs, mappedcrs, meta)
-
+            mode = _ncdmode(dataset, dimname, index, dimtype, crs, mappedcrs, meta)
             # Add the dim containing the dimension var array
             push!(dims, dimtype(index, mode, meta))
         else
@@ -334,13 +333,22 @@ function _ncfilenamekeys(filenames)
     cleankeys(_ncread(ds -> first(_nondimkeys(ds)), fn) for fn in filenames)
 end
 
-function _ncdmode(index::AbstractArray{<:Number}, dimtype, crs, mappedcrs, metadata)
+function _ncdmode(
+    ds, dimname, index::AbstractArray{<:Union{Number,Dates.AbstractTime}}, 
+    dimtype, crs, mappedcrs, metadata
+)
     # Assume the locus is at the center of the cell if boundaries aren't provided.
     # http://cfconventions.org/cf-conventions/cf-conventions.html#cell-boundaries
     # Unless its a time dimension.
     order = _ncdorder(index)
-    span = _ncdspan(index, order)
-    sampling = Points()
+    span, sampling = if haskey(ds[dimname].attrib, "bounds")
+        boundskey = ds[dimname].attrib["bounds"]
+        Explicit(permutedims(Array(ds[boundskey]))), Intervals(Center())
+    elseif eltype(index) <: Dates.AbstractTime
+        _get_period(index, metadata)
+    else
+        _ncdspan(index, order), Points()
+    end
     if dimtype in (Lat, Lon)
         # If the index is regularly spaced and there is no crs
         # then there is probably just one crs - the mappedcrs
@@ -354,12 +362,7 @@ function _ncdmode(index::AbstractArray{<:Number}, dimtype, crs, mappedcrs, metad
         Sampled(order, span, sampling)
     end
 end
-function _ncdmode(index::AbstractArray{<:Dates.AbstractTime}, dimtype, crs, mappedcrs, metadata)
-    order = _ncdorder(index)
-    span, sampling  = _get_period(index, metadata)
-    Sampled(order, span, sampling)
-end
-_ncdmode(index, dimtype, crs, mappedcrs, mode) = Categorical()
+_ncdmode(ds, dimname, index, dimtype, crs, mappedcrs, mode) = Categorical()
 
 function _ncdorder(index)
     index[end] > index[1] ? Ordered(ForwardIndex(), ForwardArray(), ForwardRelation()) :
@@ -422,6 +425,7 @@ _ncread(f, path::String) = NCD.Dataset(f, path)
 
 function _nondimkeys(dataset)
     dimkeys = keys(dataset.dim)
+    @show dimkeys
     removekeys = if "bnds" in dimkeys
         dimkeys = setdiff(dimkeys, ("bnds",))
         boundskeys = [dataset[k].attrib["bounds"] for k in dimkeys if haskey(dataset[k].attrib, "bounds")]

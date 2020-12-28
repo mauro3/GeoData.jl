@@ -279,14 +279,12 @@ function DD.dims(dataset::NCD.Dataset, key::Key, crs=nothing, mappedcrs=nothing)
     for (i, dimname) in enumerate(NCD.dimnames(v))
         if haskey(dataset, dimname)
             dvar = dataset[dimname]
-            # Find the matching dimension constructor. If its an unknown name use
-            # the generic Dim with the dim name as type parameter
-            dimtype = haskey(DIMMAP, dimname) ? DIMMAP[dimname] : DD.basetypeof(DD.key2dim(Symbol(dimname)))
+            dimtype = _ncddimtype(dimname)
             index = dvar[:]
             meta = NCDdimMetadata(DD.metadatadict(dvar.attrib))
             mode = _ncdmode(dataset, dimname, index, dimtype, crs, mappedcrs, meta)
-            # Add the dim containing the dimension var array
-            push!(dims, dimtype(index, mode, meta))
+            dim = dimtype(index, mode, meta)
+            push!(dims, dim)
         else
             # The var doesn't exist. Maybe its `complex` or some other marker,
             # so make it a custom `Dim` with `NoIndex`
@@ -320,6 +318,10 @@ missingval(var::NCD.CFVariable) = missing
 
 # Utils ########################################################################
 
+# Find the matching dimension constructor. If its an unknown name 
+# use the generic Dim with the dim name as type parameter
+_ncddimtype(dimname) = haskey(DIMMAP, dimname) ? DIMMAP[dimname] : DD.basetypeof(DD.key2dim(Symbol(dimname)))
+
 function _ncfilenamekeys(filenames)
     cleankeys(_ncread(ds -> first(_nondimkeys(ds)), fn) for fn in filenames)
 end
@@ -334,7 +336,13 @@ function _ncdmode(
     order = _ncdorder(index)
     span, sampling = if haskey(ds[dimname].attrib, "bounds")
         boundskey = ds[dimname].attrib["bounds"]
-        Explicit(permutedims(Array(ds[boundskey]))), Intervals(Center())
+        boundsvar = ds[boundskey]
+        @show boundskey
+        @show boundsvar
+        boundsmatrix = Array(boundsvar)
+        lower = view(boundsmatrix, 1, :)
+        upper = view(boundsmatrix, 2, :)
+        Explicit(lower, upper), Intervals(Center())
     elseif eltype(index) <: Dates.AbstractTime
         _get_period(index, metadata)
     else
@@ -416,15 +424,14 @@ _ncread(f, path::String) = NCD.Dataset(f, path)
 
 function _nondimkeys(dataset)
     dimkeys = keys(dataset.dim)
-    @show dimkeys
-    removekeys = if "bnds" in dimkeys
+    toremove = if "bnds" in dimkeys
         dimkeys = setdiff(dimkeys, ("bnds",))
         boundskeys = [dataset[k].attrib["bounds"] for k in dimkeys if haskey(dataset[k].attrib, "bounds")]
         union(dimkeys, boundskeys)
     else
         dimkeys
     end
-    setdiff(keys(dataset), removekeys)
+    setdiff(keys(dataset), toremove)
 end
 
 # Add a var array to a dataset before writing it.
@@ -443,6 +450,13 @@ function _ncwritevar!(dataset, A::AbstractGeoArray{T,N}) where {T,N}
         # TODO handle dim attribs
         attribvec = [] #md isa Nothing ? [] : [val(md)...]
         NCD.defDim(dataset, key, length(dim))
+        if span(dim) isa Explicit
+            boundsmatrix = hcat(val(span(dim))...)
+            @show boundsmatrix
+            boundskey = string(key, "_bnds")
+            push!(attribvec, "bounds" => boundskey)
+            NCD.defVar(dataset, boundskey, boundsmatrix, (key, "bnds"))
+        end
         println("        key: \"", key, "\" of type: ", eltype(dim))
         NCD.defVar(dataset, key, Vector(index(dim)), (key,); attrib=attribvec)
     end

@@ -9,6 +9,10 @@ gaNaN = replace_missing(ga, NaN32)
 gaMi = replace_missing(ga, missing)
 @test all(gaMi .=== ga)
 
+st = GeoStack((a=ga, b=ga))
+g = replace_missing(st, NaN32)
+@test all(g[:a] .=== gaNaN)
+
 @testset "boolmask" begin
     @test boolmask(A) == [false true; true false]
     @test boolmask(ga) == [false true; true false]
